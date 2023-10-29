@@ -6,9 +6,9 @@ The Cerebros package is an ultra-precise Neural Architecture Search (NAS) / Auto
 
 ## Cerebros Community Edition and Cerebros Enterprise
 
-The Cerebros community edition provides an open-source minimum viable single parameter set NAS and also also provides an example manifest for an exhaustive Neural Architecture Search to run on Kubeflow/Katib. This is licensed for free use provided that the use is consistent with the ethical use provisions in the license described at the bottom of this page. You can easily reproduce this with the Jupyter notebook in the directory `/kubeflow-pipeline`, using the Kale Jupyter notebook extension. For a robust managed neural architecture search experience hosted on Google Cloud Platform and supported by our SLA, we recommend Cerebros Enterprise, our commercial version. Soon you will be able to sign up and immediately start using it at `https://www.cerebros.one`. In the meantime, we can set up your own Cerbros managed neural architecture search pipeline for you with a one business day turnaround. We offer consulting, demos, full service machine learning service and can provision you with your own full neural architecture search pipeline complete with automated Bayesian hyperparameter search. Contact David Thrower:`david@cerebros.one` or call us at (US country code 1) `(650) 789-4375`. Additionally, we can complete machine learning tasks for your organization. Give us a call.
+This branch is a Cerebros Research and Development branch that may not have the same structure, efficiency or certain features as the Enterprise branch. Some features from here, such as case study examples, will be migrated to the Community branch in due time.  
 
-
+For a robust managed neural architecture search experience hosted on Google Cloud Platform and supported by our SLA, we recommend Cerebros Enterprise, our commercial version. Soon you will be able to sign up and immediately start using it at `https://www.cerebros.one`. In the meantime, we can set up your own Cerebros managed neural architecture search pipeline for you with a one business day turnaround. We offer consulting, demos, full service machine learning service and can provision you with your own full neural architecture search pipeline complete with automated Bayesian hyperparameter search. Contact David Thrower:`david@cerebros.one` or call us at (US country code 1) `(650) 789-4375`. Additionally, we can complete machine learning tasks for your organization. Give us a call.
 
 ## In summary what is it and what is different:
 
@@ -26,7 +26,7 @@ In a biological brain, neurons connect in a multi-dimensional lattice of vertica
 
 That is what we did here. We built a neural architecture search that connects Dense layers in this manner.
 
-What if we made a multi-layer pereceptron that looks like this: (Green triangles are Keras Input layers. Blue Squares are Keras Concatenate layers. The Pink stretched ovals are Keras Dense layers. The one stretched red oval is the network's Output layer. It is presumed that there is a batch normaliation layer between each Concatenate layer and the Dense layer it feeds into.)
+What if we made a multi-layer perceptron that looks like this: (Green triangles are Keras Input layers. Blue Squares are Keras Concatenate layers. The Pink stretched ovals are Keras Dense layers. The one stretched red oval is the network's Output layer. It is presumed that there is a Batch Normalization layer between each Concatenate layer and the Dense layer it feeds into.)
 
 ![assets/Brain-lookalike1.png](assets/Brain-lookalike1.png)
 
@@ -46,37 +46,25 @@ The deeper technical details can be found here:
 
 ![documentation/cerebros-technical-details.md](documentation/cerebros-technical-details.md)
 
-## Use example: Try it for yourself:
+## Use examples
 
-shell:
+Use examples are available in `use-examples`, while documentation is available in `documentation/examples`. 
 
 Clone the repo
+
 `git clone https://github.com/david-thrower/cerebros-core-algorithm-alpha.git`
 
-cd into it
-`cd cerebros-core-algorithm-alpha`
+cd into it: `cd cerebros-core-algorithm-alpha`
 
-install all required packages
-```
-pip3 install -r requirements.txt
-```
+install all required packages: `pip3 install -r requirements.txt`
+
+cd into it: `test-cases/ames-housing-price-prediction`
+
 Run the Ames housing data example:
-```
-python3 regression-example-ames-no-preproc.py
-```
 
-## Example output from this task:
+`python3 ames_housing_pred.py`
 
-```
-... # lots of summaries of training trials
-...
-
-Best result this trial was: 169.04592895507812
-Type of best result: <class 'float'>
-Best model name: 2023_01_12_23_42_cerebros_auto_ml_test_meta_0/models/tr_0000000000000006_subtrial_0000000000000000
-...
-
-```
+You can also access a Jupyter notebook version of it as `ames_housing_pred.ipynb`
 
 ## Summary of Results
 
@@ -96,19 +84,7 @@ For further details, see ![documentation/examples/use-example-detailed.md](docum
 
 [license.md](license.md)
 
-**Licnse terms may be amended at any time as deemed necessry at Cerebros sole discretion.**
-
-## Acknowledgements:
-
-1. My Jennifer and my step-kids who have chosen to stay around and have rode out quite a storm because of my career in science.
-2. My son Aidyn, daughter Jenna, and my collaborators Max Morganbesser and Andres Espinosa.
-3. Mingxing Tan, Quoc V. Le for EfficientNet (recommeded image embedding base model).
-4. My colleagues who I work with every day.
-5. Tensorflow, Keras, Kubeflow, Kale, Optuna, Keras Tuner, and Ray open source communities and contributors.
-6. Google Cloud Platform, Arikto, Canonical, and Paperspace and their support staff for the commercial compute and ML OPS platforms used.
-7. Microk8s, minikube,and the core Kubernetes communities and associated projects.
-8. Jacob Devlin, Ming-Wei Chang, Kenton Lee, Kristina Toutanova: "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding", 2018. Base embedding usee for text classification tests.
-9. Andrew Howard1, Mark Sandler1, Grace Chu1, Liang-Chieh Chen1, Bo Chen1, Mingxing Tan2, Weijun Wang1, Yukun Zhu1, Ruoming Pang2, Vijay Vasudevan2, Quoc V. Le2, Hartwig Ada MobileNet image embedding used for CICD tests.
+**License terms may be amended at any time as deemed necessary at Cerebros sole discretion.**
 
 ## Legal disclaimers:
 
