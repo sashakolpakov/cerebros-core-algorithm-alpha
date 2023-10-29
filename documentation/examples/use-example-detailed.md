@@ -10,17 +10,24 @@ cd into it: `cd cerebros-core-algorithm-alpha`
 
 install all required packages: `pip3 install -r requirements.txt`
 
+cd into it: `test-cases/ames-housing-price-prediction`
+
 Run the Ames housing data example:
 
-`python3 regression-example-ames-no-preproc.py`
+`python3 ames_housing_pred.py`
 
-Let's look at the example: `regression-example-ames-no-preproc.py`, which is in the main folder of this repo:
+You can also access a Jupyter notebook version of it as `ames_housing_pred.ipynb`
+
+Let's look at the example: `ames_housing_pred.py`, which is in the main folder of this repo:
 
 Import packages
+
 ```python3
 
+import sys
+sys.path.insert(0, '../..')
+
 import numpy as np
-# from multiprocessing import Pool  # , Process
 from cerebros.simplecerebrosrandomsearch.simple_cerebros_random_search\
     import SimpleCerebrosRandomSearch
 import pendulum
@@ -33,16 +40,13 @@ from ast import literal_eval
 ```
 
 Set how much compute resources you want to spend (Cerebros will build and train a number of models that is the product of these 2 numbers)
-```python3
 
-NUMBER_OF_TRAILS_PER_BATCH = 2
-NUMBER_OF_BATCHES_OF_TRIALS = 2
-```
 Set up project and load data
+
 ```python3
 
 
-## Set a project name:
+# Set a project name:
 
 
 TIME = pendulum.now().__str__()[:16]\
@@ -53,40 +57,38 @@ PROJECT_NAME = f'{TIME}_cerebros_auto_ml_test'
 
 
 # Read in the data
+
 raw_data = pd.read_csv('ames.csv')
 
 # Rather than doing elaborate preprocessing, let's just drop all the columns
 # that aren't numbers and impute 0 for anything missing
 
-needed_cols = [
-    col for col in raw_data.columns if raw_data[col].dtype != 'object']
+needed_cols = [col for col in raw_data.columns if raw_data[col].dtype != 'object']
 data_numeric = raw_data[needed_cols].fillna(0).astype(float)
 label = raw_data.pop('price')
 
 # Convert to numpy
 data_np = data_numeric.values
 
-# convert to a tensor
-tensor_x =\
-    tf.constant(data_np)
+# Convert to a tensor
+tensor_x = tf.constant(data_np)
 
-# Since Cerebros allows multiple inputs, the inputs are a list of tenors, even if there is just 1
+# Define the training set and labels
 training_x = [tensor_x]
-
-# Shape if the trining data [number of rows,number of columns]
-INPUT_SHAPES = [training_x[i].shape[1] for i in np.arange(len(training_x))]
-
 train_labels = [label.values]
 
+# Shape of the trining data [number of rows, number of columns]
+INPUT_SHAPES = [training_x[i].shape[1] for i in np.arange(len(training_x))]
+
 # Labels are a list of numbers, shape is the length of it
-OUTPUT_SHAPES = [1]  # [train_labels[i].shape[1]
+OUTPUT_SHAPES = [1]  
 ```
 
 Cerebros hyperparameters
 ```python3
 
-# Params for Cebros training (Approximately the oprma
-# discovered in a bayesian tuning study done on Katib
+# Parameters for Cebros training (Approximately the optima 
+# discovered in a Bayesian tuning study done on Katib
 # for this data set)
 
 # In distributed training set this to a random number, otherwise,
@@ -115,6 +117,7 @@ maximum_neurons_per_unit = 25
 ```
 
 Instantiate an instance of Cerebros Neural Architecture Search (NAS)
+
 ```python3
 
 cerebros =\
@@ -140,9 +143,9 @@ cerebros =\
         number_of_generations=3,
         minimum_skip_connection_depth=1,
         maximum_skip_connection_depth=7,
-        predecessor_level_connection_affinity_factor_first=predecessor_level_connection_affinity_factor_first,
+    predecessor_level_connection_affinity_factor_first=predecessor_level_connection_affinity_factor_first,
         predecessor_level_connection_affinity_factor_first_rounding_rule='ceil',
-        predecessor_level_connection_affinity_factor_main=predecessor_level_connection_affinity_factor_main,
+            predecessor_level_connection_affinity_factor_main=predecessor_level_connection_affinity_factor_main,
         predecessor_level_connection_affinity_factor_main_rounding_rule='ceil',
         predecessor_level_connection_affinity_factor_decay_main=zero_7_exp_decay,
         seed=8675309,
@@ -158,984 +161,35 @@ cerebros =\
         epochs=epochs,
         patience=7,
         project_name=f"{PROJECT_NAME}_meta_{meta_trial_number}",
-        # use_multiprocessing_for_multiple_neural_networks=False,  # pull this param
         model_graphs='model_graphs',
         batch_size=batch_size,
         meta_trial_number=meta_trial_number)
 
 ```
 
-Run the Neural Architecture Search and get results back.
+Run the Neural Architecture Search and get results back. Load the best model found by the search.
+
 ```python3
-result = Cerebros.run_random_search()
+result = cerebros.run_random_search()
+best_model_found = cerebros.get_best_model()
+```
 
-print("Best model: (May need to re-initialize weights, and retrain with early stopping callback)")
-best_model_found = Cerebros.get_best_model()
-print(best_model_found.summary())
+Output the number of trainable and non-trainable parameters of the model. Output the best RMSE.
 
-print("result extracted from Cerebros")
-print(f"Final result was (val_root_mean_squared_error): {result}")
+```python3
+trainable_params = np.sum([np.prod(w.get_shape()) for w in best_model_found.trainable_weights])
+non_trainable_params = np.sum([np.prod(w.get_shape()) for w in best_model_found.non_trainable_weights])
+total_params = trainable_params + non_trainable_params
 
+print(f"Best model found: {total_params} total parameters ({trainable_params} trainable, {non_trainable_params} non-trainable)")
+
+print(f"Best rmse is (val_root_mean_squared_error): {result}")
 ```
 
 ## Example output from this task:
 
-- Ames housing data set, not pre-processed or scaled:
+- Ames housing data set, no pre-processing, no scaling.
 - House sell price predictions, val_rmse $169.04592895507812.
 - The mean sale price in the data was $180,796.06.
 - Val set RMSE was 0.00935% the mean sale price. No, there's not an extra 0 in there, yes, you are reading it right.
-- There was no pre-trained base model. The data in [ames.csv](ames.csv) is the only data any of the model's weights has ever seen.
-
-```
-...
-Best result this trial was: 169.04592895507812
-Type of best result: <class 'float'>
-Best medel name: 2023_01_12_23_42_cerebros_auto_ml_test_meta_0/models/tr_0000000000000006_subtrial_0000000000000000
-Best model: (May need to re-initialize weights, and retrain with early stopping callback)
-Model: "NeuralNetworkFuture_0000000000000nan_tr_6_nn_materialized"
-__________________________________________________________________________________________________
- Layer (type)                   Output Shape         Param #     Connected to                     
-==================================================================================================
- NeuralNetworkFuture_0000000000  [(None, 39)]        0           []                               
- 000nan_tr_6_InputLevel_0000000                                                                   
- 000000000_tr_6_InputUnit_00000                                                                   
- 00000000000_tr_6_0_inp (InputL                                                                   
- ayer)                                                                                            
-
- NeuralNetworkFuture_0000000000  (None, 1560)        0           ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_InputLevel_00000000000
- 000000001_tr_6_DenseUnit_00000                                  00000_tr_6_InputUnit_000000000000
- 00000000001_tr_6_1_cat_ (Conca                                  0000_tr_6_0_inp[0][0]',          
- tenate)                                                          'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]']          
-
- NeuralNetworkFuture_0000000000  (None, 1560)        0           ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_InputLevel_00000000000
- 000000001_tr_6_DenseUnit_00000                                  00000_tr_6_InputUnit_000000000000
- 00000000001_tr_6_0_cat_ (Conca                                  0000_tr_6_0_inp[0][0]',          
- tenate)                                                          'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]']          
-
- NeuralNetworkFuture_0000000000  (None, 1560)        6240        ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000001_tr_6_DenseUnit_00000                                  00001_tr_6_DenseUnit_000000000000
- 00000000001_tr_6_1_btn_ (Batch                                  0001_tr_6_1_cat_[0][0]']         
- Normalization)                                                                                   
-
- NeuralNetworkFuture_0000000000  (None, 1560)        6240        ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000001_tr_6_DenseUnit_00000                                  00001_tr_6_DenseUnit_000000000000
- 00000000001_tr_6_0_btn_ (Batch                                  0001_tr_6_0_cat_[0][0]']         
- Normalization)                                                                                   
-
- NeuralNetworkFuture_0000000000  (None, 8)           12488       ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000001_tr_6_DenseUnit_00000                                  00001_tr_6_DenseUnit_000000000000
- 00000000001_tr_6_1_dns_ (Dense                                  0001_tr_6_1_btn_[0][0]']         
- )                                                                                                
-
- NeuralNetworkFuture_0000000000  (None, 23)          35903       ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000001_tr_6_DenseUnit_00000                                  00001_tr_6_DenseUnit_000000000000
- 00000000001_tr_6_0_dns_ (Dense                                  0001_tr_6_0_btn_[0][0]']         
- )                                                                                                
-
- NeuralNetworkFuture_0000000000  (None, 109)         0           ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_InputLevel_00000000000
- 000000002_tr_6_DenseUnit_00000                                  00000_tr_6_InputUnit_000000000000
- 00000000002_tr_6_1_cat_ (Conca                                  0000_tr_6_0_inp[0][0]',          
- tenate)                                                          'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_0_dns_[0][0]']         
-
- NeuralNetworkFuture_0000000000  (None, 109)         436         ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000002_tr_6_DenseUnit_00000                                  00002_tr_6_DenseUnit_000000000000
- 00000000002_tr_6_1_btn_ (Batch                                  0002_tr_6_1_cat_[0][0]']         
- Normalization)                                                                                   
-
- NeuralNetworkFuture_0000000000  (None, 4)           440         ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000002_tr_6_DenseUnit_00000                                  00002_tr_6_DenseUnit_000000000000
- 00000000002_tr_6_1_dns_ (Dense                                  0002_tr_6_1_btn_[0][0]']         
- )                                                                                                
-
- NeuralNetworkFuture_0000000000  (None, 144)         0           ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000002_tr_6_DenseUnit_00000                                  00002_tr_6_DenseUnit_000000000000
- 00000000002_tr_6_2_cat_ (Conca                                  0002_tr_6_1_dns_[0][0]',         
- tenate)                                                          'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_0_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_0_dns_[0][0]']         
-
- NeuralNetworkFuture_0000000000  (None, 144)         576         ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000002_tr_6_DenseUnit_00000                                  00002_tr_6_DenseUnit_000000000000
- 00000000002_tr_6_2_btn_ (Batch                                  0002_tr_6_2_cat_[0][0]']         
- Normalization)                                                                                   
-
- NeuralNetworkFuture_0000000000  (None, 11)          1595        ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000002_tr_6_DenseUnit_00000                                  00002_tr_6_DenseUnit_000000000000
- 00000000002_tr_6_2_dns_ (Dense                                  0002_tr_6_2_btn_[0][0]']         
- )                                                                                                
-
- NeuralNetworkFuture_0000000000  (None, 151)         0           ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000002_tr_6_DenseUnit_00000                                  00002_tr_6_DenseUnit_000000000000
- 00000000002_tr_6_3_cat_ (Conca                                  0002_tr_6_2_dns_[0][0]',         
- tenate)                                                          'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_2_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_0_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_1_dns_[0][0]']         
-
- NeuralNetworkFuture_0000000000  (None, 151)         604         ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000002_tr_6_DenseUnit_00000                                  00002_tr_6_DenseUnit_000000000000
- 00000000002_tr_6_3_btn_ (Batch                                  0002_tr_6_3_cat_[0][0]']         
- Normalization)                                                                                   
-
- NeuralNetworkFuture_0000000000  (None, 11)          1672        ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000002_tr_6_DenseUnit_00000                                  00002_tr_6_DenseUnit_000000000000
- 00000000002_tr_6_3_dns_ (Dense                                  0002_tr_6_3_btn_[0][0]']         
- )                                                                                                
-
- NeuralNetworkFuture_0000000000  (None, 250)         0           ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000002_tr_6_DenseUnit_00000                                  00002_tr_6_DenseUnit_000000000000
- 00000000002_tr_6_4_cat_ (Conca                                  0002_tr_6_3_dns_[0][0]',         
- tenate)                                                          'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_3_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_3_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_3_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_2_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_2_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_2_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_2_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_2_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_2_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_0_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_0_dns_[0][0]']         
-
- NeuralNetworkFuture_0000000000  (None, 250)         1000        ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000002_tr_6_DenseUnit_00000                                  00002_tr_6_DenseUnit_000000000000
- 00000000002_tr_6_4_btn_ (Batch                                  0002_tr_6_4_cat_[0][0]']         
- Normalization)                                                                                   
-
- NeuralNetworkFuture_0000000000  (None, 15)          3765        ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000002_tr_6_DenseUnit_00000                                  00002_tr_6_DenseUnit_000000000000
- 00000000002_tr_6_4_dns_ (Dense                                  0002_tr_6_4_btn_[0][0]']         
- )                                                                                                
-
- NeuralNetworkFuture_0000000000  (None, 150)         0           ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_InputLevel_00000000000
- 000000003_tr_6_DenseUnit_00000                                  00000_tr_6_InputUnit_000000000000
- 00000000003_tr_6_1_cat_ (Conca                                  0000_tr_6_0_inp[0][0]',          
- tenate)                                                          'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_4_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_4_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_2_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_4_dns_[0][0]']         
-
- NeuralNetworkFuture_0000000000  (None, 150)         600         ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000003_tr_6_DenseUnit_00000                                  00003_tr_6_DenseUnit_000000000000
- 00000000003_tr_6_1_btn_ (Batch                                  0003_tr_6_1_cat_[0][0]']         
- Normalization)                                                                                   
-
- NeuralNetworkFuture_0000000000  (None, 5)           755         ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000003_tr_6_DenseUnit_00000                                  00003_tr_6_DenseUnit_000000000000
- 00000000003_tr_6_1_dns_ (Dense                                  0003_tr_6_1_btn_[0][0]']         
- )                                                                                                
-
- NeuralNetworkFuture_0000000000  (None, 170)         0           ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000003_tr_6_DenseUnit_00000                                  00003_tr_6_DenseUnit_000000000000
- 00000000003_tr_6_2_cat_ (Conca                                  0003_tr_6_1_dns_[0][0]',         
- tenate)                                                          'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_0_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_3_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_2_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_4_dns_[0][0]']         
-
- NeuralNetworkFuture_0000000000  (None, 170)         680         ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000003_tr_6_DenseUnit_00000                                  00003_tr_6_DenseUnit_000000000000
- 00000000003_tr_6_2_btn_ (Batch                                  0003_tr_6_2_cat_[0][0]']         
- Normalization)                                                                                   
-
- NeuralNetworkFuture_0000000000  (None, 9)           1539        ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000003_tr_6_DenseUnit_00000                                  00003_tr_6_DenseUnit_000000000000
- 00000000003_tr_6_2_dns_ (Dense                                  0003_tr_6_2_btn_[0][0]']         
- )                                                                                                
-
- NeuralNetworkFuture_0000000000  (None, 131)         0           ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_InputLevel_00000000000
- 000000003_tr_6_DenseUnit_00000                                  00000_tr_6_InputUnit_000000000000
- 00000000003_tr_6_0_cat_ (Conca                                  0000_tr_6_0_inp[0][0]',          
- tenate)                                                          'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_2_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_3_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_3_dns_[0][0]']         
-
- NeuralNetworkFuture_0000000000  (None, 223)         0           ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000003_tr_6_DenseUnit_00000                                  00003_tr_6_DenseUnit_000000000000
- 00000000003_tr_6_3_cat_ (Conca                                  0003_tr_6_2_dns_[0][0]',         
- tenate)                                                          'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_2_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_2_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_4_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_4_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_0_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_3_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_2_dns_[0][0]']         
-
- NeuralNetworkFuture_0000000000  (None, 109)         0           ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_InputLevel_00000000000
- 000000002_tr_6_DenseUnit_00000                                  00000_tr_6_InputUnit_000000000000
- 00000000002_tr_6_0_cat_ (Conca                                  0000_tr_6_0_inp[0][0]',          
- tenate)                                                          'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_0_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_1_dns_[0][0]']         
-
- NeuralNetworkFuture_0000000000  (None, 131)         524         ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000003_tr_6_DenseUnit_00000                                  00003_tr_6_DenseUnit_000000000000
- 00000000003_tr_6_0_btn_ (Batch                                  0003_tr_6_0_cat_[0][0]']         
- Normalization)                                                                                   
-
- NeuralNetworkFuture_0000000000  (None, 223)         892         ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000003_tr_6_DenseUnit_00000                                  00003_tr_6_DenseUnit_000000000000
- 00000000003_tr_6_3_btn_ (Batch                                  0003_tr_6_3_cat_[0][0]']         
- Normalization)                                                                                   
-
- NeuralNetworkFuture_0000000000  (None, 109)         436         ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000002_tr_6_DenseUnit_00000                                  00002_tr_6_DenseUnit_000000000000
- 00000000002_tr_6_0_btn_ (Batch                                  0002_tr_6_0_cat_[0][0]']         
- Normalization)                                                                                   
-
- NeuralNetworkFuture_0000000000  (None, 14)          1848        ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000003_tr_6_DenseUnit_00000                                  00003_tr_6_DenseUnit_000000000000
- 00000000003_tr_6_0_dns_ (Dense                                  0003_tr_6_0_btn_[0][0]']         
- )                                                                                                
-
- NeuralNetworkFuture_0000000000  (None, 14)          3136        ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000003_tr_6_DenseUnit_00000                                  00003_tr_6_DenseUnit_000000000000
- 00000000003_tr_6_3_dns_ (Dense                                  0003_tr_6_3_btn_[0][0]']         
- )                                                                                                
-
- NeuralNetworkFuture_0000000000  (None, 14)          1540        ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_DenseLevel_0000000                                  00nan_tr_6_DenseLevel_00000000000
- 000000002_tr_6_DenseUnit_00000                                  00002_tr_6_DenseUnit_000000000000
- 00000000002_tr_6_0_dns_ (Dense                                  0002_tr_6_0_btn_[0][0]']         
- )                                                                                                
-
- NeuralNetworkFuture_0000000000  (None, 311)         0           ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_FinalDenseLevel_00                                  00nan_tr_6_DenseLevel_00000000000
- 00000000000004_tr_6_FinalDense                                  00003_tr_6_DenseUnit_000000000000
- Unit_0000000000000004_tr_6_0_c                                  0003_tr_6_0_dns_[0][0]',         
- at_ (Concatenate)                                                'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_2_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_2_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_2_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_1_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_2_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_2_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_3_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_0_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_3_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_3_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_0_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_0_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_0_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_InputLevel_00000000000
-                                                                 00000_tr_6_InputUnit_000000000000
-                                                                 0000_tr_6_0_inp[0][0]',          
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00001_tr_6_DenseUnit_000000000000
-                                                                 0001_tr_6_0_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_4_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00002_tr_6_DenseUnit_000000000000
-                                                                 0002_tr_6_3_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_0_dns_[0][0]',         
-                                                                  'NeuralNetworkFuture_00000000000
-                                                                 00nan_tr_6_DenseLevel_00000000000
-                                                                 00003_tr_6_DenseUnit_000000000000
-                                                                 0003_tr_6_1_dns_[0][0]']         
-
- NeuralNetworkFuture_0000000000  (None, 311)         1244        ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_FinalDenseLevel_00                                  00nan_tr_6_FinalDenseLevel_000000
- 00000000000004_tr_6_FinalDense                                  0000000004_tr_6_FinalDenseUnit_00
- Unit_0000000000000004_tr_6_0_b                                  00000000000004_tr_6_0_cat_[0][0]'
- tn_ (BatchNormalization)                                        ]                                
-
- NeuralNetworkFuture_0000000000  (None, 1)           312         ['NeuralNetworkFuture_00000000000
- 000nan_tr_6_FinalDenseLevel_00                                  00nan_tr_6_FinalDenseLevel_000000
- 00000000000004_tr_6_FinalDense                                  0000000004_tr_6_FinalDenseUnit_00
- Unit_0000000000000004_tr_6_0_d                                  00000000000004_tr_6_0_btn_[0][0]'
- ns_ (Dense)                                                     ]                                
-
-==================================================================================================
-Total params: 84,465
-Trainable params: 74,729
-Non-trainable params: 9,736
-__________________________________________________________________________________________________
-None
-result extracted from cerebros
-Final result was (val_root_mean_squared_error): 169.04592895507812
-```
+- There was no pre-trained base model. The data in [ames.csv](ames.csv) is the only data any of the model's weights has ever seen.                                                      
