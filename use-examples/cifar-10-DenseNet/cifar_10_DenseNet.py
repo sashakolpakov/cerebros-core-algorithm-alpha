@@ -19,7 +19,60 @@ from cerebros.denseautomlstructuralcomponent.dense_automl_structural_component\
     import zero_7_exp_decay, zero_95_exp_decay, simple_sigmoid
 from ast import literal_eval
 
-# Download DenseNet121 with Imagenet weights (1000 classes)
+# DenseNet121 PEFT on Cifar-10 with Cerebros
+
+(X_train, y_train), (X_test, y_test) = cifar10.load_data()
+
+# Input and output shapes
+
+input_shape = (32,32,3)
+INPUT_SHAPES  = [input_shape]
+OUTPUT_SHAPES = [10]
+
+# Subsampling a small balanced set of samples (with of without shuffling) from the train dataset and train labels
+
+def subsample_train(X_train, y_train, num_samples):
+    #
+    X_sub = []
+    y_sub = []
+    #
+    assert 1 <= num_samples <= 5000
+    #
+    for cat in range(10):
+        #
+        ind, _ = np.where(y_train==cat)
+        np.random.shuffle(ind)
+        #
+        X_cat = X_train[ind]
+        X_cat = X_cat[:num_samples]
+        y_cat = y_train[ind]
+        y_cat = y_cat[:num_samples]
+        #
+        X_sub += [X_cat]
+        y_sub += [y_cat]
+    #
+    X_sub = np.vstack(X_sub)
+    y_sub = np.vstack(y_sub)
+    #
+    assert X_sub.shape[0] == y_sub.shape[0]
+    #
+    ind = np.arange(X_sub.shape[0])
+    np.random.shuffle(ind)
+    #
+    return X_sub[ind], y_sub[ind]
+
+# We take only 200 samples in each category (out of 5000)
+
+num_samples = 200
+X_sub, y_sub = subsample_train(X_train, y_train, num_samples)
+
+# Preparing tensors for the training set and labels
+
+training_x   = [tf.constant(X_sub)]
+y_train_cat  = to_categorical(y_sub, 10)
+train_labels = [tf.constant(y_train_cat)]
+
+# Donwloading EfficientNet (v.2, small)
 
 dnet = tf.keras.applications.densenet.DenseNet121(include_top=True,
                                                   weights='imagenet',
@@ -30,74 +83,14 @@ dnet = tf.keras.applications.densenet.DenseNet121(include_top=True,
                                                   classifier_activation='softmax'
                                                   )
 
-dnet.summary()
-
-# Make all layers untrainable except for the very last convolutional layer
-
-for layer in dnet.layers:
-    layer.trainable = False
-dnet.layers[-6].trainable  = True
-
-# Cifar-10 testing
-
-(X_train, y_train), (X_test, y_test) = cifar10.load_data()
-
-y_train_cat = to_categorical(y_train, 1000)
-y_test_cat = to_categorical(y_test, 1000)
-
-# Lambda layer for preprocessing
+# Preprocessing images for DenseNet
 
 def preprocess(x):
     x = tf.image.resize(x,size=(224,224),method='bicubic')
     x = tf.keras.applications.densenet.preprocess_input(x)
     return x
 
-# Modify the model
-
-input_shape = (32,32,3)
-
-input_layer = Input(shape=input_shape)
-prep = Lambda(preprocess)(input_layer)
-out = dnet(prep)
-dnet_mod = Model(inputs=input_layer, outputs=out)
-
-dnet_mod.compile(optimizer='adam',
-                 loss=tf.keras.losses.CategoricalCrossentropy(),
-                 metrics=[tf.keras.metrics.TopKCategoricalAccuracy(k=1, name='top_1_categorical_accuracy')])
-
-# Try to fit it on Cifar-10 data and then evaluate (there is no hope this is gonna work ...)
-
-dnet_mod.fit(X_train, y_train_cat)
-
-dnet_mod.evaluate(X_test, y_test_cat)
-
-# Try the same with adding a Cerebros "add-on" network
-
-INPUT_SHAPES  = [input_shape]
-OUTPUT_SHAPES = [10]
-
-# Use 10k-15k random samples from Cifar-10 to speed up the process
-
-num_samples = 15_000
-rng = np.random.default_rng()
-ind = rng.permutation(X_train.shape[0])[:num_samples]
-
-training_x   = [tf.constant(X_train[ind,:,:,:])]
-y_train_cat  = to_categorical(y_train[ind], 10)
-train_labels = [tf.constant(y_train_cat)]
-
-dnet = tf.keras.applications.densenet.DenseNet121(include_top=True,
-                                                  weights='imagenet',
-                                                  input_tensor=None,
-                                                  input_shape=None,
-                                                  pooling=None,
-                                                  classes=1000,
-                                                  classifier_activation='softmax'
-                                                  )
-
-for layer in dnet.layers:
-    layer.trainable = False
-dnet.layers[-6].trainable  = True
+# Preparing the base model for Cerebros search
 
 dnet_io = Model(inputs=dnet.layers[0].input,
                 outputs=dnet.layers[-2].output)
