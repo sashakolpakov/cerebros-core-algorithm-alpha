@@ -65,9 +65,9 @@ y = df["Binary Label"].to_numpy()
 #
 X, y = shuffle(X, y)
 
-# Train / test split : we give 65% of the data for *testing*
+# Train / test split : we give 85% of the data for *testing*
 X_train, X_test, y_train, y_test = \
-train_test_split(X, y, test_size=0.65, shuffle=False)
+train_test_split(X, y, test_size=0.85, shuffle=False)
 
 #
 # Tensors for training data and labels
@@ -140,18 +140,18 @@ base_model.summary()
 #
 # Cerebros configurables
 #
-activation = 'swish'
-predecessor_level_connection_affinity_factor_first = 2.0
-predecessor_level_connection_affinity_factor_main = 0.97
-max_consecutive_lateral_connections = 5
-p_lateral_connection = 0.97
-num_lateral_connection_tries_per_unit = 2
-learning_rate = 0.001
+activation = 'gelu'
+predecessor_level_connection_affinity_factor_first = 49.9999
+predecessor_level_connection_affinity_factor_main = 0.31456
+max_consecutive_lateral_connections = 22
+p_lateral_connection = 0.39256
+num_lateral_connection_tries_per_unit = 10
+learning_rate = 0.0000511065
 epochs = 6  # [1, 100]
-batch_size = 32
-maximum_levels = 5  # [3,7]
-maximum_units_per_level = 7  # [2,10]
-maximum_neurons_per_unit = 6  # [2,20]
+batch_size = 13
+maximum_levels = 4  # [3,7]
+maximum_units_per_level = 8  # [2,10]
+maximum_neurons_per_unit = 5  # [2,20]
 
 #
 # Logging
@@ -230,12 +230,12 @@ best_model_found.evaluate(X_test, y_test)
 
 """### Training the best model on a larger dataset, and testing again"""
 
-# Train / test split : we give 65% of the data for training,
+# Train / test split : we give 75% of the data for *testing*,
 # now that we have found the best model
 X_train, X_test, y_train, y_test = \
-train_test_split(X, y, test_size=0.35, shuffle=False)
+train_test_split(X, y, test_size=0.75, shuffle=False)
 
-optimizer = Adam(learning_rate=0.0005)
+optimizer = Adam(learning_rate=learning_rate)
 #loss=tf.keras.losses.BinaryCrossentropy()
 loss = tf.keras.losses.CategoricalHinge()
 metrics=[tf.keras.metrics.BinaryAccuracy(),
